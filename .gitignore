@@ -4,6 +4,7 @@ nbproject
 .project
 .settings
 .DS_Store
+.vscode
 
 var
 vendor
