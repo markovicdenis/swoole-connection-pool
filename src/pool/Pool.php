@@ -117,8 +117,8 @@ class Pool implements PoolInterface, PoolControlInterface
             throw new Exceptions\BorrowTimeoutException('Can\'t get item after hooks');
         }
 
-        $this->idledItemStorage->detach($poolItemWrapper);
-        $this->borrowedItemStorage->attach($item, $poolItemWrapper);
+        $this->idledItemStorage->offsetUnset($poolItemWrapper);
+        $this->borrowedItemStorage->offsetSet($item, $poolItemWrapper);
 
         if ($this->config->bindToCoroutine) {
             $this->itemToCoroutineBindings[$cid] = $item;
@@ -171,12 +171,12 @@ class Pool implements PoolInterface, PoolControlInterface
             }
         }
 
-        $this->idledItemStorage->attach($poolItemWrapper, hrtime(true));
+        $this->idledItemStorage->offsetSet($poolItemWrapper, hrtime(true));
 
         $isReturned = $this->concurrentBag->push($poolItemWrapper, $this->config->returningTimeoutSec);
 
         if (!$isReturned) {
-            $this->idledItemStorage->detach($poolItemWrapper);
+            $this->idledItemStorage->offsetUnset($poolItemWrapper);
         }
     }
 
@@ -265,7 +265,7 @@ class Pool implements PoolInterface, PoolControlInterface
         $this->metrics->itemCreatedTotal++;
         $this->metrics->itemCreationTotalSec += 1e-9 * (hrtime(true) - $start);
 
-        $this->idledItemStorage->attach($poolItemWrapper, hrtime(true));
+        $this->idledItemStorage->offsetSet($poolItemWrapper, hrtime(true));
 
         $result = $this->concurrentBag->push($poolItemWrapper, .001);
 
@@ -324,14 +324,14 @@ class Pool implements PoolInterface, PoolControlInterface
         $poolItem = $poolItemRef;
         $poolItemRef = null;
 
-        if (!$this->borrowedItemStorage->contains($poolItem)) {
+        if (!$this->borrowedItemStorage->offsetExists($poolItem)) {
             return null;
         }
 
         /** @var PoolItemWrapperInterface<TItem> $poolItemWrapper */
         $poolItemWrapper = $this->borrowedItemStorage[$poolItem];
 
-        $this->borrowedItemStorage->detach($poolItem);
+        $this->borrowedItemStorage->offsetUnset($poolItem);
 
         unset($this->itemToCoroutineBindings[Coroutine::getCid()]);
 
@@ -347,7 +347,7 @@ class Pool implements PoolInterface, PoolControlInterface
      */
     protected function removePoolItemWrapper(PoolItemWrapperInterface $poolItemWrapper): void
     {
-        $this->idledItemStorage->detach($poolItemWrapper);
+        $this->idledItemStorage->offsetUnset($poolItemWrapper);
 
         $poolItemWrapper->close();
 

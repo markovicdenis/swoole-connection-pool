@@ -12,3 +12,5 @@ composer.phar
 
 phpunit.xml
 _generated
+
+.php-cs-fixer.dist.php
