@@ -30,7 +30,7 @@ use function array_key_exists;
  * @implements PoolInterface<TItem>
  * @implements PoolControlInterface<TItem>
  */
-final class Pool implements PoolInterface, PoolControlInterface
+class Pool implements PoolInterface, PoolControlInterface
 {
     protected PoolMetrics $metrics;
 

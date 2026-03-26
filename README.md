@@ -23,8 +23,8 @@ composer require allsilaevex/swoole-connection-pool
 
 <h3>Requirements</h3>
 
-* <a href="https://www.php.net/manual/en/install.php">PHP 8.2.0</a> or later
-* <a href="https://github.com/swoole/swoole-src">Swoole 5.1.0</a> or later
+- <a href="https://www.php.net/manual/en/install.php">PHP 8.2.0</a> or later
+- <a href="https://github.com/swoole/swoole-src">Swoole 5.1.0</a> or later
 
 > [!WARNING]
 > Pool has not been tested with `swoole.enable_preemptive_scheduler = 1`. Use at your own risk!
@@ -65,16 +65,16 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 <h2>✨ Features</h2>
 
-* High-performance even in unusual cases (see <a href="#benchmarks">Benchmarks</a>)
-* Handling connection failure and self-recovery
-* Doesn't burden the garbage collector
-* Coverage by static analyzers (PHPStan, Psalm) and support generics
-* Out of the box connection pool provides:
-  * load-dependent resizing number of connections
-  * reconnection for long-lived connections
-  * leaked connection detection
-  * support lifetime hooks for connections
-* Metrics that can be easily stored into Prometheus and used for analysis
+- High-performance even in unusual cases (see <a href="#benchmarks">Benchmarks</a>)
+- Handling connection failure and self-recovery
+- Doesn't burden the garbage collector
+- Coverage by static analyzers (PHPStan, Psalm) and support generics
+- Out of the box connection pool provides:
+    - load-dependent resizing number of connections
+    - reconnection for long-lived connections
+    - leaked connection detection
+    - support lifetime hooks for connections
+- Metrics that can be easily stored into Prometheus and used for analysis
 
 <h2>❓ Why should I use a connection pool?</h2>
 
@@ -239,6 +239,27 @@ require_once __DIR__ . '/vendor/autoload.php';
 
     // Maximum time that a connection can be out of the pool without leak warnings
     $connectionPoolFactory->setLeakDetectionThresholdSec(1.0);
+
+    // Allows adding custom pool-level timer tasks for diagnostics or other periodic maintenance.
+    // The task must implement \Allsilaevex\Pool\TimerTask\TimerTaskInterface and will be bound to the pool instance.
+    $connectionPoolFactory->addPoolTimerTask(new class () implements \Allsilaevex\Pool\TimerTask\TimerTaskInterface {
+        public function run(int $timerId, mixed $runnerRef): void
+        {
+            $pool = $runnerRef->get();
+
+            if ($pool === null) {
+                return;
+            }
+
+            // Custom diagnostics or metrics collection.
+            $pool->stats();
+        }
+
+        public function getIntervalSec(): float
+        {
+            return 10.0;
+        }
+    });
 
     // Allows adding a KeepaliveChecker that must implement the \Allsilaevex\ConnectionPool\KeepaliveCheckerInterface
     // This checker will be called at a specified interval and can trigger connection re-creation (if it returns false)

@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\ConnectionPool\ConnectionPoolFactory;
 use Allsilaevex\ConnectionPool\KeepaliveCheckerInterface;
+use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
 #[AllowMockObjectsWithoutExpectations]
@@ -46,6 +47,38 @@ final class ConnectionPoolFactoryTest extends TestCase
             ->setAutoReturn(false);
 
         static::assertSame($subclassFactory::class, $createdFactory::class);
+    }
+
+    public function testCustomPoolTimerTaskRunsOnInstantiate(): void
+    {
+        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
+
+        $timerTask = new class() implements TimerTaskInterface {
+            /** @var list<string> */
+            public array $runnerNames = [];
+
+            #[\Override]
+            public function run(int $timerId, mixed $runnerRef): void
+            {
+                $runner = $runnerRef->get();
+
+                if ($runner !== null) {
+                    $this->runnerNames[] = $runner->getName();
+                }
+            }
+
+            #[\Override]
+            public function getIntervalSec(): float
+            {
+                return 60.0;
+            }
+        };
+
+        ConnectionPoolFactory::create(size: 1, factory: $poolItemFactoryInterfaceMock)
+            ->addPoolTimerTask($timerTask)
+            ->instantiate(name: 'custom-pool');
+
+        static::assertSame(['custom-pool'], $timerTask->runnerNames);
     }
 
     public function testMaxLifetimeRecreatesIdleConnection(): void

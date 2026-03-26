@@ -15,6 +15,7 @@ use Allsilaevex\Pool\PoolItemWrapperFactory;
 use Allsilaevex\Pool\Hook\PoolItemHookManager;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperInterface;
+use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskScheduler;
 use Allsilaevex\ConnectionPool\Tasks\ResizerTimerTask;
 use Allsilaevex\ConnectionPool\Hooks\ConnectionCheckHook;
@@ -50,6 +51,9 @@ class ConnectionPoolFactory
     /** @var list<KeepaliveCheckerInterface<TConnection>> */
     protected array $keepaliveCheckers;
 
+    /** @var list<TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>>> */
+    protected array $poolTimerTasks;
+
     /**
      * @param  positive-int                           $size
      * @param  PoolItemFactoryInterface<TConnection>  $factory
@@ -61,6 +65,7 @@ class ConnectionPoolFactory
         $this->checkers = [];
         $this->logger = new NullLogger();
         $this->keepaliveCheckers = [];
+        $this->poolTimerTasks = [];
 
         $this->minimumIdle = $this->size;
         $this->autoReturn = true;
@@ -217,6 +222,18 @@ class ConnectionPoolFactory
     }
 
     /**
+     * @param  TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>>  $timerTask
+     *
+     * @return static
+     */
+    public function addPoolTimerTask(TimerTaskInterface $timerTask): static
+    {
+        $this->poolTimerTasks[] = $timerTask;
+
+        return $this;
+    }
+
+    /**
      *
      * @return PoolInterface<TConnection>
      */
@@ -234,10 +251,9 @@ class ConnectionPoolFactory
             bindToCoroutine: $this->bindToCoroutine,
         );
 
-        $timerTaskScheduler = new TimerTaskScheduler([
-            new ResizerTimerTask(.1, $this->minimumIdle, $this->idleTimeoutSec, $this->logger),
-            new LeakDetectionTimerTask($this->leakDetectionThresholdSec, $this->leakDetectionThresholdSec, $this->logger),
-        ]);
+        /** @var TimerTaskScheduler<\Allsilaevex\Pool\PoolControlInterface<TConnection>> $timerTaskScheduler */
+        /** @psalm-suppress InvalidArgument */
+        $timerTaskScheduler = new TimerTaskScheduler($this->createPoolTimerTasks());
 
         $poolItemUpdaterTimerTask = new PoolItemUpdaterTimerTask(
             intervalSec: $this->maxLifetimeSec / 10.0,
@@ -277,6 +293,18 @@ class ConnectionPoolFactory
         );
 
         return $pool;
+    }
+
+    /**
+     * @return list<TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>>>
+     */
+    protected function createPoolTimerTasks(): array
+    {
+        return [
+            new ResizerTimerTask(.1, $this->minimumIdle, $this->idleTimeoutSec, $this->logger),
+            new LeakDetectionTimerTask($this->leakDetectionThresholdSec, $this->leakDetectionThresholdSec, $this->logger),
+            ...$this->poolTimerTasks,
+        ];
     }
 
     /**

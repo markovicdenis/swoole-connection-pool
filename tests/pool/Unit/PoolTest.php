@@ -19,6 +19,20 @@ use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 #[CoversClass(Pool::class)]
 final class PoolTest extends TestCase
 {
+    public function testPoolCanBeSubclassed(): void
+    {
+        $poolItemWrapperFactoryMock = $this->createMock(PoolItemWrapperFactoryInterface::class);
+
+        $pool = new class(
+            name: 'pool_name',
+            config: new PoolConfig(1, .1, .1),
+            poolItemWrapperFactory: $poolItemWrapperFactoryMock,
+        ) extends Pool {
+        };
+
+        static::assertSame('pool_name', $pool->getName());
+    }
+
     public function testGetName(): void
     {
         $poolItemWrapperFactoryMock = $this->createMock(PoolItemWrapperFactoryInterface::class);
