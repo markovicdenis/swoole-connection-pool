@@ -35,6 +35,19 @@ final class ConnectionPoolFactoryTest extends TestCase
         static::assertEquals($connection->id, $connectionFromPool->id);
     }
 
+    public function testCreatePreservesSubclassType(): void
+    {
+        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
+
+        $subclassFactory = new class(size: 1, factory: $poolItemFactoryInterfaceMock) extends ConnectionPoolFactory {
+        };
+
+        $createdFactory = $subclassFactory::create(size: 1, factory: $poolItemFactoryInterfaceMock)
+            ->setAutoReturn(false);
+
+        static::assertSame($subclassFactory::class, $createdFactory::class);
+    }
+
     public function testMaxLifetimeRecreatesIdleConnection(): void
     {
         $factory = new /**

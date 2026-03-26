@@ -30,7 +30,7 @@ use function array_map;
 /**
  * @template TConnection of object
  */
-final class ConnectionPoolFactory
+class ConnectionPoolFactory
 {
     protected int $minimumIdle;
     protected bool $autoReturn;
@@ -79,17 +79,17 @@ final class ConnectionPoolFactory
      * @param  positive-int                 $size
      * @param  PoolItemFactoryInterface<T>  $factory
      *
-     * @return self<T>
+     * @return static
      */
-    public static function create(int $size, PoolItemFactoryInterface $factory): self
+    public static function create(int $size, PoolItemFactoryInterface $factory): static
     {
-        return new self($size, $factory);
+        return new static($size, $factory);
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setLogger(LoggerInterface $logger): self
+    public function setLogger(LoggerInterface $logger): static
     {
         $this->logger = $logger;
 
@@ -97,9 +97,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setLeakDetectionThresholdSec(float $leakDetectionThresholdSec): self
+    public function setLeakDetectionThresholdSec(float $leakDetectionThresholdSec): static
     {
         $this->leakDetectionThresholdSec = $leakDetectionThresholdSec;
 
@@ -107,9 +107,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setMaxItemReservingForUpdateWaitingTimeSec(float $maxItemReservingForUpdateWaitingTimeSec): self
+    public function setMaxItemReservingForUpdateWaitingTimeSec(float $maxItemReservingForUpdateWaitingTimeSec): static
     {
         $this->maxItemReservingForUpdateWaitingTimeSec = $maxItemReservingForUpdateWaitingTimeSec;
 
@@ -117,9 +117,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setAutoReturn(bool $autoReturn): self
+    public function setAutoReturn(bool $autoReturn): static
     {
         $this->autoReturn = $autoReturn;
 
@@ -127,9 +127,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setBindToCoroutine(bool $bindToCoroutine): self
+    public function setBindToCoroutine(bool $bindToCoroutine): static
     {
         $this->bindToCoroutine = $bindToCoroutine;
 
@@ -139,9 +139,9 @@ final class ConnectionPoolFactory
     /**
      * @param  positive-int  $minimumIdle
      *
-     * @return self<TConnection>
+     * @return static
      */
-    public function setMinimumIdle(int $minimumIdle): self
+    public function setMinimumIdle(int $minimumIdle): static
     {
         if ($minimumIdle > $this->size) {
             throw new LogicException();
@@ -153,9 +153,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setIdleTimeoutSec(float $idleTimeoutSec): self
+    public function setIdleTimeoutSec(float $idleTimeoutSec): static
     {
         $this->idleTimeoutSec = $idleTimeoutSec;
 
@@ -163,9 +163,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setMaxLifetimeSec(float $maxLifetimeSec): self
+    public function setMaxLifetimeSec(float $maxLifetimeSec): static
     {
         $this->maxLifetimeSec = $maxLifetimeSec;
 
@@ -173,9 +173,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setBorrowingTimeoutSec(float $borrowingTimeoutSec): self
+    public function setBorrowingTimeoutSec(float $borrowingTimeoutSec): static
     {
         $this->borrowingTimeoutSec = $borrowingTimeoutSec;
 
@@ -183,9 +183,9 @@ final class ConnectionPoolFactory
     }
 
     /**
-     * @return self<TConnection>
+     * @return static
      */
-    public function setReturningTimeoutSec(float $returningTimeoutSec): self
+    public function setReturningTimeoutSec(float $returningTimeoutSec): static
     {
         $this->returningTimeoutSec = $returningTimeoutSec;
 
@@ -195,9 +195,9 @@ final class ConnectionPoolFactory
     /**
      * @param  callable(TConnection): bool  $checker
      *
-     * @return self<TConnection>
+     * @return static
      */
-    public function addConnectionChecker(callable $checker): self
+    public function addConnectionChecker(callable $checker): static
     {
         $this->checkers[] = $checker;
 
@@ -207,9 +207,9 @@ final class ConnectionPoolFactory
     /**
      * @param  KeepaliveCheckerInterface<TConnection>  $keepaliveChecker
      *
-     * @return self<TConnection>
+     * @return static
      */
-    public function addKeepaliveChecker(KeepaliveCheckerInterface $keepaliveChecker): self
+    public function addKeepaliveChecker(KeepaliveCheckerInterface $keepaliveChecker): static
     {
         $this->keepaliveCheckers[] = $keepaliveChecker;
 
