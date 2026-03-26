@@ -16,7 +16,7 @@ use function is_null;
  * @template TItem of object
  * @implements TimerTaskInterface<PoolControlInterface<TItem>>
  */
-readonly class LeakDetectionTimerTask implements TimerTaskInterface
+final readonly class LeakDetectionTimerTask implements TimerTaskInterface
 {
     public function __construct(
         public float $intervalSec,
@@ -28,6 +28,7 @@ readonly class LeakDetectionTimerTask implements TimerTaskInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function run(int $timerId, mixed $runnerRef): void
     {
         /** @var PoolControlInterface<TItem>|null $runner */
@@ -46,7 +47,7 @@ readonly class LeakDetectionTimerTask implements TimerTaskInterface
             $state = $poolItemWrapper->getState();
             $currentStateDurationSec = $poolItemWrapper->stats()['current_state_duration_sec'];
 
-            if ($currentStateDurationSec > $this->leakDetectionThresholdSec && $state == PoolItemState::IN_USE) {
+            if ($currentStateDurationSec > $this->leakDetectionThresholdSec && $state === PoolItemState::IN_USE) {
                 $context = [
                     'pool_name' => $runner->getName(),
                     'item_id' => $poolItemWrapper->getId(),
@@ -58,6 +59,7 @@ readonly class LeakDetectionTimerTask implements TimerTaskInterface
         }
     }
 
+    #[\Override]
     public function getIntervalSec(): float
     {
         return $this->intervalSec;

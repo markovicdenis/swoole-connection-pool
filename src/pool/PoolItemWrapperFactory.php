@@ -10,7 +10,7 @@ use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
  * @template TItem of object
  * @implements PoolItemWrapperFactoryInterface<TItem>
  */
-class PoolItemWrapperFactory implements PoolItemWrapperFactoryInterface
+final class PoolItemWrapperFactory implements PoolItemWrapperFactoryInterface
 {
     /**
      * @param  PoolItemFactoryInterface<TItem>  $factory
@@ -27,6 +27,7 @@ class PoolItemWrapperFactory implements PoolItemWrapperFactoryInterface
      *
      * @throws Exceptions\PoolItemCreationException
      */
+    #[\Override]
     public function create(): PoolItemWrapperInterface
     {
         /** @psalm-suppress InvalidArgument */

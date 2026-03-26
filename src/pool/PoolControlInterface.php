@@ -31,11 +31,12 @@ interface PoolControlInterface
 
     /**
      * @param TItem|null $poolItemRef
+     * @phpstan-param-out null $poolItemRef
      */
     public function removeItem(mixed &$poolItemRef): void;
 
     /**
-     * @return SplObjectStorage<PoolItemWrapperInterface<TItem>, float>
+     * @return SplObjectStorage<PoolItemWrapperInterface<TItem>, int>
      */
     public function getIdledItemStorage(): SplObjectStorage;
 

@@ -21,6 +21,7 @@ use function max;
 use function hrtime;
 use function is_null;
 use function sprintf;
+use function spl_object_id;
 use function array_key_exists;
 
 /**
@@ -29,20 +30,24 @@ use function array_key_exists;
  * @implements PoolInterface<TItem>
  * @implements PoolControlInterface<TItem>
  */
-class Pool implements PoolInterface, PoolControlInterface
+final class Pool implements PoolInterface, PoolControlInterface
 {
     protected PoolMetrics $metrics;
 
     /** @var SplObjectStorage<TItem, PoolItemWrapperInterface<TItem>> */
     protected SplObjectStorage $borrowedItemStorage;
 
-    /** @var SplObjectStorage<PoolItemWrapperInterface<TItem>, float> */
+    /** @var SplObjectStorage<PoolItemWrapperInterface<TItem>, int> */
     protected SplObjectStorage $idledItemStorage;
 
+    /** @var Channel<PoolItemWrapperInterface<TItem>> */
     protected Channel $concurrentBag;
 
     /** @var array<int, TItem> */
     protected array $itemToCoroutineBindings;
+
+    /** @var array<int, int> */
+    protected array $borrowedItemOwnerCoroutineBindings;
 
     protected int $itemWrapperCount;
 
@@ -66,6 +71,7 @@ class Pool implements PoolInterface, PoolControlInterface
         $this->idledItemStorage = new SplObjectStorage();
         $this->borrowedItemStorage = new SplObjectStorage();
         $this->itemToCoroutineBindings = [];
+        $this->borrowedItemOwnerCoroutineBindings = [];
 
         $this->timerTaskScheduler?->bindTo($this);
         $this->timerTaskScheduler?->run();
@@ -77,10 +83,8 @@ class Pool implements PoolInterface, PoolControlInterface
     {
         $this->timerTaskScheduler?->stop();
 
-        // @phpstan-ignore-next-line
         $this->idledItemStorage->removeAll($this->idledItemStorage);
 
-        // @phpstan-ignore-next-line
         $this->borrowedItemStorage->removeAll($this->borrowedItemStorage);
 
         $this->concurrentBag->close();
@@ -89,6 +93,7 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function borrow(): mixed
     {
         $cid = Coroutine::getCid();
@@ -99,52 +104,81 @@ class Pool implements PoolInterface, PoolControlInterface
 
         $start = hrtime(true);
 
-        $poolItemWrapper = $this->getReservedPoolItemWrapperWithExistingItem(
-            timeLeftSec: $this->config->borrowingTimeoutSec,
-            increaseItemsOnEmptyPool: true,
-        );
+        while (true) {
+            $elapsedSec = (((float) hrtime(true)) - ((float) $start)) / 1_000_000_000.0;
 
-        $this->poolItemHookManager?->run(PoolItemHook::BEFORE_BORROW, $poolItemWrapper);
+            if ($elapsedSec >= $this->config->borrowingTimeoutSec) {
+                $this->metrics->borrowingTimeoutsTotal++;
 
-        if (!$poolItemWrapper->compareAndSetState(PoolItemState::RESERVED, PoolItemState::IN_USE)) {
-            throw new LogicException();
+                throw new Exceptions\BorrowTimeoutException('Can\'t get valid item from pool before timeout');
+            }
+
+            $poolItemWrapper = $this->getReservedPoolItemWrapperWithExistingItem(
+                timeLeftSec: max(.0001, $this->config->borrowingTimeoutSec - $elapsedSec),
+                increaseItemsOnEmptyPool: true,
+            );
+
+            try {
+                $this->poolItemHookManager?->run(PoolItemHook::BEFORE_BORROW, $poolItemWrapper);
+            } catch (Throwable $throwable) {
+                $this->removePoolItemWrapper($poolItemWrapper);
+
+                $this->logger->error(
+                    sprintf(
+                        'Can\'t prepare item for borrowing (%s): %s',
+                        (new ReflectionClass($throwable))->getShortName(),
+                        $throwable->getMessage(),
+                    ),
+                    ['pool_name' => $this->getName(), 'item_id' => $poolItemWrapper->getId()],
+                );
+
+                continue;
+            }
+
+            if (!$poolItemWrapper->compareAndSetState(PoolItemState::RESERVED, PoolItemState::IN_USE)) {
+                throw new LogicException();
+            }
+
+            $item = $poolItemWrapper->getItem();
+
+            if (is_null($item)) {
+                $this->removePoolItemWrapper($poolItemWrapper);
+
+                continue;
+            }
+
+            $this->idledItemStorage->offsetUnset($poolItemWrapper);
+            $this->borrowedItemStorage->offsetSet($item, $poolItemWrapper);
+            $this->borrowedItemOwnerCoroutineBindings[spl_object_id($item)] = $cid;
+
+            if ($this->config->bindToCoroutine) {
+                $this->itemToCoroutineBindings[$cid] = $item;
+            }
+
+            if ($this->config->autoReturn) {
+                $itemRef = WeakReference::create($item);
+
+                Coroutine::defer(function () use ($cid, $itemRef) {
+                    unset($this->itemToCoroutineBindings[$cid]);
+
+                    $item = $itemRef->get();
+
+                    $this->return($item);
+                });
+            }
+
+            $this->metrics->borrowedTotal++;
+            $this->metrics->waitingForItemBorrowingTotalSec += ((((float) hrtime(true)) - ((float) $start))) / 1_000_000_000.0;
+
+            return $item;
         }
-
-        $item = $poolItemWrapper->getItem();
-
-        // todo: in this case it's probably better to try getting a new pool item wrapper
-        if (is_null($item)) {
-            throw new Exceptions\BorrowTimeoutException('Can\'t get item after hooks');
-        }
-
-        $this->idledItemStorage->offsetUnset($poolItemWrapper);
-        $this->borrowedItemStorage->offsetSet($item, $poolItemWrapper);
-
-        if ($this->config->bindToCoroutine) {
-            $this->itemToCoroutineBindings[$cid] = $item;
-        }
-
-        if ($this->config->autoReturn) {
-            $itemRef = WeakReference::create($item);
-
-            Coroutine::defer(function () use ($cid, $itemRef) {
-                unset($this->itemToCoroutineBindings[$cid]);
-
-                $item = $itemRef->get();
-
-                $this->return($item);
-            });
-        }
-
-        $this->metrics->borrowedTotal++;
-        $this->metrics->waitingForItemBorrowingTotalSec += 1e-9 * (hrtime(true) - $start);
-
-        return $item;
     }
 
     /**
      * @inheritDoc
+     * @phpstan-param-out null $poolItemRef
      */
+    #[\Override]
     public function return(mixed &$poolItemRef): void
     {
         $poolItemWrapper = $this->returnBorrowedItem($poolItemRef);
@@ -171,7 +205,7 @@ class Pool implements PoolInterface, PoolControlInterface
             }
         }
 
-        $this->idledItemStorage->offsetSet($poolItemWrapper, hrtime(true));
+        $this->idledItemStorage->offsetSet($poolItemWrapper, (int) hrtime(true));
 
         $isReturned = $this->concurrentBag->push($poolItemWrapper, $this->config->returningTimeoutSec);
 
@@ -183,6 +217,7 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function stats(): array
     {
         return [
@@ -206,16 +241,19 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function getName(): string
     {
         return $this->name;
     }
 
+    #[\Override]
     public function getIdleCount(): int
     {
         return $this->concurrentBag->length();
     }
 
+    #[\Override]
     public function getCurrentSize(): int
     {
         return $this->itemWrapperCount;
@@ -224,6 +262,7 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function getIdledItemStorage(): SplObjectStorage
     {
         return $this->idledItemStorage;
@@ -232,11 +271,13 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function getBorrowedItemStorage(): SplObjectStorage
     {
         return $this->borrowedItemStorage;
     }
 
+    #[\Override]
     public function getConfig(): PoolConfig
     {
         return $this->config;
@@ -245,6 +286,7 @@ class Pool implements PoolInterface, PoolControlInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function increaseItems(): bool
     {
         if ($this->concurrentBag->isFull()) {
@@ -263,9 +305,9 @@ class Pool implements PoolInterface, PoolControlInterface
         }
 
         $this->metrics->itemCreatedTotal++;
-        $this->metrics->itemCreationTotalSec += 1e-9 * (hrtime(true) - $start);
+        $this->metrics->itemCreationTotalSec += ((((float) hrtime(true)) - ((float) $start))) / 1_000_000_000.0;
 
-        $this->idledItemStorage->offsetSet($poolItemWrapper, hrtime(true));
+        $this->idledItemStorage->offsetSet($poolItemWrapper, (int) hrtime(true));
 
         $result = $this->concurrentBag->push($poolItemWrapper, .001);
 
@@ -276,6 +318,7 @@ class Pool implements PoolInterface, PoolControlInterface
         return $result;
     }
 
+    #[\Override]
     public function decreaseItems(): bool
     {
         if ($this->concurrentBag->isEmpty()) {
@@ -296,7 +339,9 @@ class Pool implements PoolInterface, PoolControlInterface
 
     /**
      * @inheritDoc
+     * @phpstan-param-out null $poolItemRef
      */
+    #[\Override]
     public function removeItem(mixed &$poolItemRef): void
     {
         $poolItemWrapper = $this->returnBorrowedItem($poolItemRef);
@@ -312,6 +357,7 @@ class Pool implements PoolInterface, PoolControlInterface
 
     /**
      * @param  TItem|null  $poolItemRef
+     * @phpstan-param-out null $poolItemRef
      *
      * @return PoolItemWrapperInterface<TItem>|null
      */
@@ -333,9 +379,12 @@ class Pool implements PoolInterface, PoolControlInterface
 
         $this->borrowedItemStorage->offsetUnset($poolItem);
 
-        unset($this->itemToCoroutineBindings[Coroutine::getCid()]);
+        $ownerCid = $this->borrowedItemOwnerCoroutineBindings[spl_object_id($poolItem)] ?? Coroutine::getCid();
 
-        if ($poolItemWrapper->getState() != PoolItemState::IN_USE) {
+        unset($this->borrowedItemOwnerCoroutineBindings[spl_object_id($poolItem)]);
+        unset($this->itemToCoroutineBindings[$ownerCid]);
+
+        if ($poolItemWrapper->getState() !== PoolItemState::IN_USE) {
             throw new LogicException();
         }
 
@@ -399,7 +448,7 @@ class Pool implements PoolInterface, PoolControlInterface
     {
         $start = hrtime(true);
         $poolItemWrapper = $this->getPoolItemWrapper($timeoutSec, $increaseItemsOnEmptyPool);
-        $timeoutSec = max(.0001, $timeoutSec - (hrtime(true) - $start) * 1e-9);
+        $timeoutSec = max(.0001, $timeoutSec - ((((float) hrtime(true)) - ((float) $start)) / 1_000_000_000.0));
 
         if (!$poolItemWrapper->waitForCompareAndSetState(PoolItemState::IDLE, PoolItemState::RESERVED, $timeoutSec)) {
             $context = [
@@ -442,7 +491,7 @@ class Pool implements PoolInterface, PoolControlInterface
         if (is_null($poolItemWrapper->getItem())) {
             $this->removePoolItemWrapper($poolItemWrapper);
 
-            $recalculatedTimeLeftSec = max(.0001, $timeLeftSec - (hrtime(true) - $start) * 1e-9);
+            $recalculatedTimeLeftSec = max(.0001, $timeLeftSec - ((((float) hrtime(true)) - ((float) $start)) / 1_000_000_000.0));
 
             return $this->getReservedPoolItemWrapperWithExistingItem($recalculatedTimeLeftSec, increaseItemsOnEmptyPool: false);
         }

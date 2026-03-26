@@ -6,6 +6,6 @@ namespace Allsilaevex\Pool\Exceptions;
 
 use Exception;
 
-class PoolItemRemovedException extends Exception
+final class PoolItemRemovedException extends Exception
 {
 }

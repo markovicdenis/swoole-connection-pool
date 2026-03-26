@@ -11,10 +11,13 @@ use Allsilaevex\Pool\PoolItemState;
 use Allsilaevex\Pool\PoolItemWrapper;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
+use Allsilaevex\Pool\Exceptions\PoolItemCreationException;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(PoolItemWrapper::class)]
-class PoolItemWrapperTest extends TestCase
+final class PoolItemWrapperTest extends TestCase
 {
     public function testCreatedWithIdleState(): void
     {
@@ -31,7 +34,7 @@ class PoolItemWrapperTest extends TestCase
     public function testGetItem(): void
     {
         $factoryMock = $this->createMock(PoolItemFactoryInterface::class);
-        $factoryMock->expects(self::once())->method('create')->willReturn(value: 'item');
+        $factoryMock->expects(self::once())->method('create')->willReturn('item');
 
         $timerTaskSchedulerMock = $this->createMock(TimerTaskSchedulerInterface::class);
 
@@ -98,13 +101,14 @@ class PoolItemWrapperTest extends TestCase
         $poolItemWrapper->close();
     }
 
-    public function testItemDeletedBeforeRecreate(): void
+    public function testExistingItemIsKeptWhenRecreateFails(): void
     {
         $factory = new /**
          * @implements PoolItemFactoryInterface<object>
          */ class() extends stdClass implements PoolItemFactoryInterface {
             public int $count = 0;
 
+            #[\Override]
             public function create(): mixed
             {
                 if ($this->count > 0) {
@@ -113,14 +117,18 @@ class PoolItemWrapperTest extends TestCase
 
                 return new class($this) {
                     public function __construct(
-                        protected stdClass $factory,
+                        protected object $factory,
                     ) {
-                        $this->factory->count++;
+                        /** @var stdClass&object{count: int} $factory */
+                        $factory = $this->factory;
+                        $factory->count++;
                     }
 
                     public function __destruct()
                     {
-                        $this->factory->count--;
+                        /** @var stdClass&object{count: int} $factory */
+                        $factory = $this->factory;
+                        $factory->count--;
                     }
                 };
             }
@@ -130,9 +138,21 @@ class PoolItemWrapperTest extends TestCase
 
         $poolItemWrapper = new PoolItemWrapper($factory, $timerTaskSchedulerMock);
 
-        $poolItemWrapper->recreateItem();
+        $item = $poolItemWrapper->getItem();
+
+        try {
+            $poolItemWrapper->recreateItem();
+
+            static::fail();
+        } catch (PoolItemCreationException $exception) {
+            static::assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        }
+
+        static::assertSame($item, $poolItemWrapper->getItem());
+        static::assertEquals(1, $factory->count);
 
         $poolItemWrapper->close();
+        unset($item);
 
         static::assertEquals(0, $factory->count);
     }

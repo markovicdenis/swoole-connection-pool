@@ -9,22 +9,17 @@ use Throwable;
 use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
 use Allsilaevex\Pool\PoolConfig;
-use Allsilaevex\Pool\PoolMetrics;
-use Allsilaevex\Pool\PoolItemWrapper;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Allsilaevex\Pool\PoolItemWrapperFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
 use function uniqid;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(Pool::class)]
-#[CoversClass(PoolMetrics::class)]
-#[UsesClass(PoolConfig::class)]
-#[UsesClass(PoolItemWrapper::class)]
-#[UsesClass(PoolItemWrapperFactory::class)]
-class PoolStatsTest extends TestCase
+final class PoolStatsTest extends TestCase
 {
     public function testCounters(): void
     {
@@ -92,7 +87,7 @@ class PoolStatsTest extends TestCase
         static::assertEquals(2, $stats['item_deleted_total']);
         static::assertEquals(1, $stats['borrowing_timeouts_total']);
 
-        static::assertGreaterThan(4 * .004, $stats['item_in_use_total_sec']);
+        static::assertGreaterThan(.016, $stats['item_in_use_total_sec']);
         static::assertGreaterThan(.0, $stats['item_creation_total_sec']);
         static::assertGreaterThan(.0, $stats['waiting_for_item_borrowing_total_sec']);
     }

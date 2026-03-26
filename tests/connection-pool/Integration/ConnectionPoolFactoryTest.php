@@ -7,32 +7,15 @@ namespace Allsilaevex\ConnectionPool\Test\Integration;
 use stdClass;
 use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
-use Allsilaevex\Pool\PoolConfig;
-use Allsilaevex\Pool\PoolMetrics;
-use Allsilaevex\Pool\PoolItemWrapper;
-use PHPUnit\Framework\Attributes\UsesClass;
-use Allsilaevex\Pool\PoolItemWrapperFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
-use Allsilaevex\Pool\TimerTask\TimerTaskScheduler;
 use Allsilaevex\ConnectionPool\ConnectionPoolFactory;
-use Allsilaevex\ConnectionPool\Tasks\ResizerTimerTask;
-use Allsilaevex\ConnectionPool\Tasks\LeakDetectionTimerTask;
-use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerAwareTrait;
-use Allsilaevex\ConnectionPool\Tasks\PoolItemUpdaterTimerTask;
+use Allsilaevex\ConnectionPool\KeepaliveCheckerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(ConnectionPoolFactory::class)]
-#[UsesClass(Pool::class)]
-#[UsesClass(PoolConfig::class)]
-#[UsesClass(PoolMetrics::class)]
-#[UsesClass(PoolItemWrapper::class)]
-#[UsesClass(ResizerTimerTask::class)]
-#[UsesClass(TimerTaskScheduler::class)]
-#[UsesClass(LeakDetectionTimerTask::class)]
-#[UsesClass(PoolItemWrapperFactory::class)]
-#[UsesClass(PoolItemUpdaterTimerTask::class)]
-#[UsesClass(TimerTaskSchedulerAwareTrait::class)]
-class ConnectionPoolFactoryTest extends TestCase
+final class ConnectionPoolFactoryTest extends TestCase
 {
     public function testInstantiate(): void
     {
@@ -50,5 +33,160 @@ class ConnectionPoolFactoryTest extends TestCase
         $connectionFromPool = $pool->borrow();
 
         static::assertEquals($connection->id, $connectionFromPool->id);
+    }
+
+    public function testMaxLifetimeRecreatesIdleConnection(): void
+    {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass&object{id: int}>
+         */ class() implements PoolItemFactoryInterface {
+            private int $_nextId = 0;
+
+            #[\Override]
+            public function create(): mixed
+            {
+                /** @var stdClass&object{id: int} $connection */
+                $connection = new stdClass();
+                $connection->id = ++$this->_nextId;
+
+                return $connection;
+            }
+        };
+
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 1, factory: $factory)
+            ->setMaxLifetimeSec(.02);
+
+        $pool = $connectionPoolFactory->instantiate();
+
+        /** @var stdClass&object{id: int} $firstConnection */
+        $firstConnection = $pool->borrow();
+        $firstId = $firstConnection->id;
+        $pool->return($firstConnection);
+
+        \Swoole\Coroutine::sleep(.05);
+
+        /** @var stdClass&object{id: int} $secondConnection */
+        $secondConnection = $pool->borrow();
+
+        static::assertNotSame($firstId, $secondConnection->id);
+
+        $pool->return($secondConnection);
+    }
+
+    public function testKeepaliveCheckerRecreatesIdleConnection(): void
+    {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass&object{id: int}>
+         */ class() implements PoolItemFactoryInterface {
+            private int $_nextId = 0;
+
+            #[\Override]
+            public function create(): mixed
+            {
+                /** @var stdClass&object{id: int} $connection */
+                $connection = new stdClass();
+                $connection->id = ++$this->_nextId;
+
+                return $connection;
+            }
+        };
+
+        /** @var stdClass&object{staleConnectionId: int|null} $state */
+        $state = new stdClass();
+        $state->staleConnectionId = null;
+
+        $checker = new /**
+         * @implements KeepaliveCheckerInterface<stdClass&object{id: int}>
+         */ class($state) implements KeepaliveCheckerInterface {
+            public function __construct(
+                private stdClass $_state,
+            ) {
+            }
+
+            #[\Override]
+            public function check(mixed $connection): bool
+            {
+                return $connection instanceof stdClass
+                    && ($this->_state->staleConnectionId === null || $connection->id !== $this->_state->staleConnectionId);
+            }
+
+            #[\Override]
+            public function getIntervalSec(): float
+            {
+                return .01;
+            }
+        };
+
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 1, factory: $factory)
+            ->addKeepaliveChecker($checker);
+
+        $pool = $connectionPoolFactory->instantiate();
+
+        /** @var stdClass&object{id: int} $firstConnection */
+        $firstConnection = $pool->borrow();
+        $firstId = $firstConnection->id;
+        $state->staleConnectionId = $firstId;
+        $pool->return($firstConnection);
+
+        $replacementId = $firstId;
+
+        for ($attempt = 0; $attempt < 10 && $replacementId === $firstId; $attempt++) {
+            \Swoole\Coroutine::sleep(.02);
+
+            /** @var stdClass&object{id: int} $secondConnection */
+            $secondConnection = $pool->borrow();
+            $replacementId = $secondConnection->id;
+            $pool->return($secondConnection);
+        }
+
+        static::assertNotSame($firstId, $replacementId);
+    }
+
+    public function testResizerShrinksIdlePoolAfterTimeout(): void
+    {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass&object{id: int}>
+         */ class() implements PoolItemFactoryInterface {
+            private int $_nextId = 0;
+
+            #[\Override]
+            public function create(): mixed
+            {
+                /** @var stdClass&object{id: int} $connection */
+                $connection = new stdClass();
+                $connection->id = ++$this->_nextId;
+
+                return $connection;
+            }
+        };
+
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 2, factory: $factory)
+            ->setAutoReturn(false)
+            ->setBindToCoroutine(false)
+            ->setMinimumIdle(1)
+            ->setIdleTimeoutSec(.05);
+
+        $pool = $connectionPoolFactory->instantiate();
+
+        static::assertInstanceOf(Pool::class, $pool);
+
+        /** @var Pool<stdClass&object{id: int}> $pool */
+        $firstConnection = $pool->borrow();
+        $secondConnection = $pool->borrow();
+
+        $pool->return($firstConnection);
+        $pool->return($secondConnection);
+
+        static::assertGreaterThan(1, $pool->getCurrentSize());
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            if ($pool->getCurrentSize() < 2) {
+                break;
+            }
+
+            \Swoole\Coroutine::sleep(.02);
+        }
+
+        static::assertEquals(1, $pool->getCurrentSize());
     }
 }

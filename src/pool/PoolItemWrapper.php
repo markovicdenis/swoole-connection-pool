@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Allsilaevex\Pool;
 
+use Throwable;
 use LogicException;
 use Swoole\Coroutine\Channel;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
@@ -15,9 +16,9 @@ use function uniqid;
  * @template TItem of object
  * @implements PoolItemWrapperInterface<TItem>
  */
-class PoolItemWrapper implements PoolItemWrapperInterface
+final class PoolItemWrapper implements PoolItemWrapperInterface
 {
-    protected const CHANNEL_TIMEOUT_SEC = .001;
+    protected const float CHANNEL_TIMEOUT_SEC = .001;
 
     /**
      * @var non-empty-string
@@ -27,13 +28,13 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /** @var TItem|null */
     protected mixed $item;
 
-    protected float $itemCreatedAt;
+    protected int $itemCreatedAt;
 
     protected PoolItemState $state;
 
-    protected float $stateUpdatedAt;
+    protected int $stateUpdatedAt;
 
-    /** @var array<value-of<PoolItemState>, Channel> */
+    /** @var array<value-of<PoolItemState>, Channel<bool>> */
     protected array $stateStatuses;
 
     /**
@@ -49,7 +50,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
         $this->id = uniqid('pool_item_', more_entropy: true);
         $this->state = PoolItemState::IDLE;
         $this->stateStatuses = [];
-        $this->stateUpdatedAt = hrtime(true);
+        $this->stateUpdatedAt = (int) hrtime(true);
 
         foreach (PoolItemState::cases() as $case) {
             $this->stateStatuses[$case->value] = new Channel();
@@ -67,7 +68,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
 
     public function __destruct()
     {
-        if ($this->state == PoolItemState::REMOVED) {
+        if ($this->state === PoolItemState::REMOVED) {
             return;
         }
 
@@ -77,6 +78,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function getId(): string
     {
         return $this->id;
@@ -85,6 +87,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function getItem(): mixed
     {
         $this->selfCheck();
@@ -95,20 +98,27 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function recreateItem(): void
     {
         $this->selfCheck();
 
-        // destruct first
-        $this->item = null;
-        $this->itemCreatedAt = .0;
+        try {
+            /** @psalm-suppress InvalidPropertyAssignmentValue */
+            $item = $this->factory->create();
+        } catch (Exceptions\PoolItemCreationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            throw new Exceptions\PoolItemCreationException($exception->getMessage(), previous: $exception);
+        }
 
-        /** @psalm-suppress InvalidPropertyAssignmentValue */
-        $this->item = $this->factory->create();
+        /** @var TItem $item */
+        $this->item = $item;
 
-        $this->itemCreatedAt = hrtime(true);
+        $this->itemCreatedAt = (int) hrtime(true);
     }
 
+    #[\Override]
     public function getState(): PoolItemState
     {
         return $this->state;
@@ -117,9 +127,10 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function setState(PoolItemState $state): void
     {
-        if ($state == PoolItemState::REMOVED) {
+        if ($state === PoolItemState::REMOVED) {
             throw new LogicException('Can\'t directly set REMOVED state (use close() method)');
         }
 
@@ -142,11 +153,11 @@ class PoolItemWrapper implements PoolItemWrapperInterface
                 ],
             ];
 
-            throw new LogicException('debug info = ' . \json_encode($debug));
+            throw new LogicException('debug info = ' . var_export($debug, true));
         }
 
         $this->state = $state;
-        $this->stateUpdatedAt = hrtime(true);
+        $this->stateUpdatedAt = (int) hrtime(true);
 
         $statusesSnapshot = $this->takeStatusesSnapshot();
 
@@ -162,16 +173,17 @@ class PoolItemWrapper implements PoolItemWrapperInterface
                 ],
             ];
 
-            throw new LogicException('debug info = ' . \json_encode($debug));
+            throw new LogicException('debug info = ' . var_export($debug, true));
         }
     }
 
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function compareAndSetState(PoolItemState $expect, PoolItemState $update): bool
     {
-        if ($this->state == $expect) {
+        if ($this->state === $expect) {
             $this->setState($update);
             return true;
         }
@@ -182,9 +194,10 @@ class PoolItemWrapper implements PoolItemWrapperInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function waitForCompareAndSetState(PoolItemState $expect, PoolItemState $update, float $timeoutSec): bool
     {
-        if ($update == PoolItemState::REMOVED) {
+        if ($update === PoolItemState::REMOVED) {
             throw new LogicException('Can\'t directly set REMOVED state (use close() method)');
         }
 
@@ -197,7 +210,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
         }
 
         $this->state = $update;
-        $this->stateUpdatedAt = hrtime(true);
+        $this->stateUpdatedAt = (int) hrtime(true);
 
         $statusesSnapshot = $this->takeStatusesSnapshot();
 
@@ -213,20 +226,21 @@ class PoolItemWrapper implements PoolItemWrapperInterface
                 ],
             ];
 
-            throw new LogicException('debug info = ' . \json_encode($debug));
+            throw new LogicException('debug info = ' . var_export($debug, true));
         }
 
         return true;
     }
 
+    #[\Override]
     public function close(): void
     {
-        if ($this->state == PoolItemState::REMOVED) {
+        if ($this->state === PoolItemState::REMOVED) {
             return;
         }
 
         $this->state = PoolItemState::REMOVED;
-        $this->stateUpdatedAt = hrtime(true);
+        $this->stateUpdatedAt = (int) hrtime(true);
 
         $this->timerTaskScheduler->stop();
 
@@ -235,17 +249,18 @@ class PoolItemWrapper implements PoolItemWrapperInterface
         }
 
         $this->item = null;
-        $this->itemCreatedAt = hrtime(true);
+        $this->itemCreatedAt = (int) hrtime(true);
     }
 
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function stats(): array
     {
         return [
-            'item_lifetime_sec' => (hrtime(true) - $this->itemCreatedAt) * 1e-9,
-            'current_state_duration_sec' => (hrtime(true) - $this->stateUpdatedAt) * 1e-9,
+            'item_lifetime_sec' => ((((float) hrtime(true)) - ((float) $this->itemCreatedAt))) / 1_000_000_000.0,
+            'current_state_duration_sec' => ((((float) hrtime(true)) - ((float) $this->stateUpdatedAt))) / 1_000_000_000.0,
         ];
     }
 
@@ -254,7 +269,7 @@ class PoolItemWrapper implements PoolItemWrapperInterface
      */
     protected function selfCheck(): void
     {
-        if ($this->state == PoolItemState::REMOVED) {
+        if ($this->state === PoolItemState::REMOVED) {
             throw new Exceptions\PoolItemRemovedException();
         }
     }

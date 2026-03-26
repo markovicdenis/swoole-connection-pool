@@ -10,7 +10,7 @@ use Allsilaevex\Pool\PoolItemWrapperInterface;
  * @template TItem of object
  * @implements PoolItemHookManagerInterface<TItem>
  */
-readonly class PoolItemHookManager implements PoolItemHookManagerInterface
+final readonly class PoolItemHookManager implements PoolItemHookManagerInterface
 {
     /** @var array<value-of<PoolItemHook>, list<PoolItemHookInterface<TItem>>> */
     protected array $hooks;
@@ -27,6 +27,7 @@ readonly class PoolItemHookManager implements PoolItemHookManagerInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function run(PoolItemHook $poolHook, PoolItemWrapperInterface $poolItemWrapper): void
     {
         $hooks = $this->hooks[$poolHook->value] ?? [];

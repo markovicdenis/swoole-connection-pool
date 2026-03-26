@@ -15,8 +15,7 @@ use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerAwareTrait;
 use function is_null;
 
 #[CoversClass(TimerTaskScheduler::class)]
-#[CoversClass(TimerTaskSchedulerAwareTrait::class)]
-class TimerTaskSchedulerTest extends TestCase
+final class TimerTaskSchedulerTest extends TestCase
 {
     public function testRunWithoutBinding(): void
     {
@@ -146,6 +145,7 @@ class TimerTaskSchedulerTest extends TestCase
             /** @phpstan-use TimerTaskSchedulerAwareTrait<stdClass&object{counter: int}> */
             use TimerTaskSchedulerAwareTrait;
 
+            #[\Override]
             public function run(int $timerId, mixed $runnerRef): void
             {
                 $runner = $runnerRef->get();
@@ -156,11 +156,12 @@ class TimerTaskSchedulerTest extends TestCase
 
                 $runner->counter++;
 
-                if ($runner->counter == 2) {
+                if ($runner->counter === 2) {
                     $this->timerTaskSchedulerRef?->get()?->stopTask($timerId);
                 }
             }
 
+            #[\Override]
             public function getIntervalSec(): float
             {
                 return .002;

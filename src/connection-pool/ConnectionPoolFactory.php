@@ -15,7 +15,6 @@ use Allsilaevex\Pool\PoolItemWrapperFactory;
 use Allsilaevex\Pool\Hook\PoolItemHookManager;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperInterface;
-use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskScheduler;
 use Allsilaevex\ConnectionPool\Tasks\ResizerTimerTask;
 use Allsilaevex\ConnectionPool\Hooks\ConnectionCheckHook;
@@ -31,7 +30,7 @@ use function array_map;
 /**
  * @template TConnection of object
  */
-class ConnectionPoolFactory
+final class ConnectionPoolFactory
 {
     protected int $minimumIdle;
     protected bool $autoReturn;
@@ -223,7 +222,7 @@ class ConnectionPoolFactory
      */
     public function instantiate(string $name = ''): PoolInterface
     {
-        if ($name == '') {
+        if ($name === '') {
             $name = $this->generateName();
         }
 
@@ -240,9 +239,8 @@ class ConnectionPoolFactory
             new LeakDetectionTimerTask($this->leakDetectionThresholdSec, $this->leakDetectionThresholdSec, $this->logger),
         ]);
 
-        /** @var TimerTaskInterface<PoolItemWrapperInterface<TConnection>> $poolItemUpdaterTimerTask */
         $poolItemUpdaterTimerTask = new PoolItemUpdaterTimerTask(
-            intervalSec: $this->maxLifetimeSec / 10,
+            intervalSec: $this->maxLifetimeSec / 10.0,
             maxLifetimeSec: $this->maxLifetimeSec,
             logger: $this->logger,
             maxItemReservingWaitingTimeSec: $this->maxItemReservingForUpdateWaitingTimeSec,
@@ -254,6 +252,7 @@ class ConnectionPoolFactory
         );
 
         /** @var TimerTaskScheduler<PoolItemWrapperInterface<TConnection>> $poolItemTimerTaskScheduler */
+        /** @psalm-suppress InvalidArgument */
         $poolItemTimerTaskScheduler = new TimerTaskScheduler([
             $poolItemUpdaterTimerTask,
             ...$poolItemTimerTasks,

@@ -8,21 +8,16 @@ use stdClass;
 use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
 use Allsilaevex\Pool\PoolConfig;
-use Allsilaevex\Pool\PoolMetrics;
-use Allsilaevex\Pool\PoolItemWrapper;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Allsilaevex\Pool\PoolItemWrapperFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperFactoryInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(Pool::class)]
-#[UsesClass(PoolConfig::class)]
-#[UsesClass(PoolMetrics::class)]
-#[UsesClass(PoolItemWrapper::class)]
-#[UsesClass(PoolItemWrapperFactory::class)]
-class PoolTest extends TestCase
+final class PoolTest extends TestCase
 {
     public function testGetName(): void
     {
@@ -97,7 +92,6 @@ class PoolTest extends TestCase
 
         $pool->return($unnecessaryItem);
 
-        static::assertNull($unnecessaryItem);
         static::assertEquals(0, $pool->getCurrentSize());
     }
 

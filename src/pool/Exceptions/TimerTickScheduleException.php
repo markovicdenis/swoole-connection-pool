@@ -6,6 +6,6 @@ namespace Allsilaevex\Pool\Exceptions;
 
 use Exception;
 
-class TimerTickScheduleException extends Exception
+final class TimerTickScheduleException extends Exception
 {
 }

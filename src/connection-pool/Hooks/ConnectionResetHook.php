@@ -14,7 +14,7 @@ use function is_null;
  * @template TItem of object
  * @implements PoolItemHookInterface<TItem>
  */
-readonly class ConnectionResetHook implements PoolItemHookInterface
+final readonly class ConnectionResetHook implements PoolItemHookInterface
 {
     /**
      * @param  callable(TItem): void  $resetter
@@ -27,6 +27,7 @@ readonly class ConnectionResetHook implements PoolItemHookInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function invoke(PoolItemWrapperInterface $poolItemWrapper): void
     {
         $item = $poolItemWrapper->getItem();
@@ -37,6 +38,7 @@ readonly class ConnectionResetHook implements PoolItemHookInterface
         }
     }
 
+    #[\Override]
     public function getHook(): PoolItemHook
     {
         return PoolItemHook::AFTER_RETURN;

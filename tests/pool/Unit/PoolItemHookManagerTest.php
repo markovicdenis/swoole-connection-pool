@@ -12,7 +12,7 @@ use Allsilaevex\Pool\PoolItemWrapperInterface;
 use Allsilaevex\Pool\Hook\PoolItemHookInterface;
 
 #[CoversClass(PoolItemHookManager::class)]
-class PoolItemHookManagerTest extends TestCase
+final class PoolItemHookManagerTest extends TestCase
 {
     public function testRun(): void
     {
@@ -40,11 +40,13 @@ class PoolItemHookManagerTest extends TestCase
             ) {
             }
 
+            #[\Override]
             public function invoke(PoolItemWrapperInterface $poolItemWrapper): void
             {
                 $poolItemWrapper->getItem();
             }
 
+            #[\Override]
             public function getHook(): PoolItemHook
             {
                 return $this->hook;

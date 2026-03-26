@@ -17,6 +17,7 @@ interface PoolInterface
 
     /**
      * @param  TItem|null  $poolItemRef
+     * @phpstan-param-out null $poolItemRef
      */
     public function return(mixed &$poolItemRef): void;
 

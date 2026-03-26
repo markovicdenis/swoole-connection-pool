@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <psalm xmlns="https://getpsalm.org/schema/config"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
-       errorLevel="2"
-       cacheDirectory="./var/cache/psalm"
-       findUnusedCode="false"
-       findUnusedBaselineEntry="true">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    errorLevel="2"
+    cacheDirectory="./var/cache/psalm"
+    findUnusedCode="false"
+    findUnusedBaselineEntry="true">
     <projectFiles>
         <directory name="./src/pool"/>
         <directory name="./src/connection-pool"/>
@@ -23,4 +23,11 @@
         <file name="./vendor/swoole/ide-helper/src/swoole_library/src/core/Coroutine/functions.php"/>
         <file name="./vendor/swoole/ide-helper/src/swoole_library/src/core/Coroutine/WaitGroup.php"/>
     </stubs>
+
+    <issueHandlers>
+        <MissingAbstractPureAnnotation errorLevel="suppress"/>
+        <MissingInterfaceImmutableAnnotation errorLevel="suppress"/>
+        <ReferenceConstraintViolation errorLevel="suppress"/>
+        <MissingPureAnnotation errorLevel="suppress"/>
+    </issueHandlers>
 </psalm>

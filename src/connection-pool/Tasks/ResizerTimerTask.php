@@ -18,7 +18,7 @@ use function is_null;
  *
  * @implements TimerTaskInterface<PoolControlInterface<TItem>>
  */
-class ResizerTimerTask implements TimerTaskInterface
+final class ResizerTimerTask implements TimerTaskInterface
 {
     /** @phpstan-use TimerTaskSchedulerAwareTrait<PoolControlInterface<TItem>> */
     use TimerTaskSchedulerAwareTrait;
@@ -34,6 +34,7 @@ class ResizerTimerTask implements TimerTaskInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function run(int $timerId, mixed $runnerRef): void
     {
         /** @var PoolControlInterface<TItem>|null $runner */
@@ -43,7 +44,7 @@ class ResizerTimerTask implements TimerTaskInterface
             return;
         }
 
-        if ($runner->getCurrentSize() > 0 && $runner->getConfig()->size == $this->minimumIdle) {
+        if ($runner->getCurrentSize() > 0 && $runner->getConfig()->size === $this->minimumIdle) {
             $this->timerTaskSchedulerRef?->get()?->stopTask($timerId);
 
             return;
@@ -62,21 +63,27 @@ class ResizerTimerTask implements TimerTaskInterface
         if ($runner->getIdleCount() > $this->minimumIdle) {
             $now = hrtime(true);
             $idleItemCount = 0;
+            $idledItemStorage = $runner->getIdledItemStorage();
 
-            foreach ($runner->getIdledItemStorage() as $item) {
-                $time = $runner->getIdledItemStorage()[$item];
+            $idledItemStorage->rewind();
 
-                if (($now - $time) * 1e-9 > $this->idleTimeoutSec) {
+            while ($idledItemStorage->valid()) {
+                $time = $idledItemStorage->getInfo();
+
+                if ((((float) $now) - ((float) $time)) / 1_000_000_000.0 > $this->idleTimeoutSec) {
                     $idleItemCount++;
                 }
+
+                $idledItemStorage->next();
             }
 
-            while ($idleItemCount-- != 0 && $runner->getIdleCount() > $this->minimumIdle) {
+            while ($idleItemCount-- !== 0 && $runner->getIdleCount() > $this->minimumIdle) {
                 $runner->decreaseItems();
             }
         }
     }
 
+    #[\Override]
     public function getIntervalSec(): float
     {
         return $this->intervalSec;

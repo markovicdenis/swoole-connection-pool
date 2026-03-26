@@ -18,7 +18,7 @@ use function is_null;
  * @template TItem of object
  * @implements TimerTaskInterface<PoolItemWrapperInterface<TItem>>
  */
-readonly class KeepaliveCheckTimerTask implements TimerTaskInterface
+final readonly class KeepaliveCheckTimerTask implements TimerTaskInterface
 {
     /**
      * @param  KeepaliveCheckerInterface<TItem>  $keepaliveChecker
@@ -32,6 +32,7 @@ readonly class KeepaliveCheckTimerTask implements TimerTaskInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function run(int $timerId, mixed $runnerRef): void
     {
         /** @var PoolItemWrapperInterface<TItem>|null $runner */
@@ -63,6 +64,7 @@ readonly class KeepaliveCheckTimerTask implements TimerTaskInterface
         }
     }
 
+    #[\Override]
     public function getIntervalSec(): float
     {
         return $this->keepaliveChecker->getIntervalSec();

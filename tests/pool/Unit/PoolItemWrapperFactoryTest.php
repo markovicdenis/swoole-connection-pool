@@ -11,10 +11,12 @@ use Allsilaevex\Pool\PoolItemWrapperFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(PoolItemWrapperFactory::class)]
 #[UsesClass(PoolItemWrapper::class)]
-class PoolItemWrapperFactoryTest extends TestCase
+final class PoolItemWrapperFactoryTest extends TestCase
 {
     public function testCreatePoolItemWrapper(): void
     {

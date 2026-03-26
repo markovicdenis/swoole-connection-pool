@@ -10,7 +10,7 @@ use Allsilaevex\Pool\PoolConfig;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(PoolConfig::class)]
-class PoolConfigTest extends TestCase
+final class PoolConfigTest extends TestCase
 {
     public function testInabilityCreateIncorrectConfigState(): void
     {

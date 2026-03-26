@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Allsilaevex\Pool;
 
-class PoolMetrics
+final class PoolMetrics
 {
     public function __construct(
         public int $borrowedTotal = 0,

@@ -18,7 +18,7 @@ use function method_exists;
  * @template TRunner of object
  * @implements TimerTaskSchedulerInterface<TRunner>
  */
-class TimerTaskScheduler implements TimerTaskSchedulerInterface
+final class TimerTaskScheduler implements TimerTaskSchedulerInterface
 {
     /** @var WeakReference<TRunner>|null  */
     protected ?WeakReference $runnerRef;
@@ -36,7 +36,7 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
         $this->timerTaskIds = [];
 
         foreach ($this->timerTasks as $timerTask) {
-            /** @see \Allsilaevex\Pool\TimerTask\TimerTaskSchedulerAwareTrait */
+            /** @see TimerTaskSchedulerAwareTrait */
             if (method_exists($timerTask, 'setTimerTaskScheduler')) {
                 $timerTask->setTimerTaskScheduler($this);
             }
@@ -46,6 +46,7 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function bindTo(object $runner): void
     {
         $timerTaskIdCount = count($this->timerTaskIds);
@@ -61,6 +62,7 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
         }
     }
 
+    #[\Override]
     public function run(): void
     {
         if (is_null($this->runnerRef)) {
@@ -72,6 +74,7 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
         }
     }
 
+    #[\Override]
     public function start(): void
     {
         if (is_null($this->runnerRef)) {
@@ -79,7 +82,7 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
         }
 
         foreach ($this->timerTasks as $timerTask) {
-            $timerId = Timer::tick((int)round(1000 * $timerTask->getIntervalSec()), $timerTask->run(...), $this->runnerRef);
+            $timerId = Timer::tick((int) round($timerTask->getIntervalSec() * 1000.0), $timerTask->run(...), $this->runnerRef);
 
             if ($timerId === false) {
                 throw new TimerTickScheduleException();
@@ -89,11 +92,13 @@ class TimerTaskScheduler implements TimerTaskSchedulerInterface
         }
     }
 
+    #[\Override]
     public function stopTask(int $timerId): bool
     {
         return Timer::clear($timerId);
     }
 
+    #[\Override]
     public function stop(): void
     {
         foreach ($this->timerTaskIds as $timerId) {

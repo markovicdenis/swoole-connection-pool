@@ -17,7 +17,7 @@ use function is_null;
  * @template TItem of object
  * @implements TimerTaskInterface<PoolItemWrapperInterface<TItem>>
  */
-readonly class PoolItemUpdaterTimerTask implements TimerTaskInterface
+final readonly class PoolItemUpdaterTimerTask implements TimerTaskInterface
 {
     public function __construct(
         public float $intervalSec,
@@ -30,6 +30,7 @@ readonly class PoolItemUpdaterTimerTask implements TimerTaskInterface
     /**
      * @inheritDoc
      */
+    #[\Override]
     public function run(int $timerId, mixed $runnerRef): void
     {
         /** @var PoolItemWrapperInterface<TItem>|null $runner */
@@ -39,7 +40,7 @@ readonly class PoolItemUpdaterTimerTask implements TimerTaskInterface
             return;
         }
 
-        if ($this->maxItemReservingWaitingTimeSec == .0) {
+        if ($this->maxItemReservingWaitingTimeSec === .0) {
             $isReserved = $runner->compareAndSetState(
                 expect: PoolItemState::IDLE,
                 update: PoolItemState::RESERVED,
@@ -73,6 +74,7 @@ readonly class PoolItemUpdaterTimerTask implements TimerTaskInterface
         }
     }
 
+    #[\Override]
     public function getIntervalSec(): float
     {
         return $this->intervalSec;

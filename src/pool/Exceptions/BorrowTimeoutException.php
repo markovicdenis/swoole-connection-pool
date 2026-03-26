@@ -6,6 +6,6 @@ namespace Allsilaevex\Pool\Exceptions;
 
 use Exception;
 
-class BorrowTimeoutException extends Exception
+final class BorrowTimeoutException extends Exception
 {
 }

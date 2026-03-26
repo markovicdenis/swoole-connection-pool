@@ -6,7 +6,8 @@ namespace Allsilaevex\Pool;
 
 use LogicException;
 
-readonly class PoolConfig
+/** @psalm-immutable */
+final readonly class PoolConfig
 {
     /**
      * @param  positive-int  $size

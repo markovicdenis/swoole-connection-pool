@@ -10,7 +10,7 @@ use Allsilaevex\Pool\PoolItemFactoryInterface;
 /**
  * @implements PoolItemFactoryInterface<PDO>
  */
-readonly class PDOConnectionFactory implements PoolItemFactoryInterface
+final readonly class PDOConnectionFactory implements PoolItemFactoryInterface
 {
     /**
      * @param  array<string, mixed>  $options
@@ -23,6 +23,7 @@ readonly class PDOConnectionFactory implements PoolItemFactoryInterface
     ) {
     }
 
+    #[\Override]
     public function create(): mixed
     {
         return new PDO(

@@ -6,38 +6,31 @@ namespace Allsilaevex\Pool\Test\Integration;
 
 use stdClass;
 use Throwable;
+use Psr\Log\NullLogger;
 use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
 use Allsilaevex\Pool\PoolConfig;
-use Allsilaevex\Pool\PoolMetrics;
 use Allsilaevex\Pool\PoolItemState;
-use Allsilaevex\Pool\PoolItemWrapper;
 use Allsilaevex\Pool\Hook\PoolItemHook;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Allsilaevex\Pool\PoolItemWrapperFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\Hook\PoolItemHookManager;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperInterface;
 use Allsilaevex\Pool\Hook\PoolItemHookInterface;
-use Allsilaevex\Pool\TimerTask\TimerTaskScheduler;
 use Allsilaevex\Pool\PoolItemWrapperFactoryInterface;
-use Allsilaevex\ConnectionPool\Tasks\ResizerTimerTask;
 use Allsilaevex\Pool\Exceptions\BorrowTimeoutException;
+use Allsilaevex\ConnectionPool\Hooks\ConnectionCheckHook;
+use Allsilaevex\Pool\Exceptions\PoolItemCreationException;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
 use function is_null;
 use function mb_strlen;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(Pool::class)]
-#[UsesClass(PoolConfig::class)]
-#[UsesClass(PoolMetrics::class)]
-#[UsesClass(PoolItemWrapper::class)]
-#[UsesClass(ResizerTimerTask::class)]
-#[UsesClass(TimerTaskScheduler::class)]
-#[UsesClass(PoolItemHookManager::class)]
-#[UsesClass(PoolItemWrapperFactory::class)]
-class PoolTest extends TestCase
+final class PoolTest extends TestCase
 {
     public function testBorrowAndReturnItem(): void
     {
@@ -51,7 +44,7 @@ class PoolTest extends TestCase
 
         $pool->return($item);
 
-        static::assertNull($item);
+        static::assertSame(1, $pool->getIdleCount());
     }
 
     public function testBorrowAndRemoveItem(): void
@@ -68,7 +61,6 @@ class PoolTest extends TestCase
 
         $pool->removeItem($item);
 
-        static::assertNull($item);
         static::assertEquals(0, $pool->getIdleCount());
 
         /** @var stdClass&object{id: non-empty-string} $newItem */
@@ -87,6 +79,7 @@ class PoolTest extends TestCase
             /**
              * @return stdClass
              */
+            #[\Override]
             public function create(): mixed
             {
                 $obj = new stdClass();
@@ -118,6 +111,7 @@ class PoolTest extends TestCase
             /**
              * @return stdClass
              */
+            #[\Override]
             public function create(): mixed
             {
                 $obj = new stdClass();
@@ -145,7 +139,18 @@ class PoolTest extends TestCase
 
         \Swoole\Coroutine\batch([$taskFactory(1), $taskFactory(2)]);
 
-        static::assertNotEquals($usedItems[0]->id, $usedItems[1]->id);
+        if (count($usedItems) !== 2) {
+            static::fail('Expected two used items');
+        }
+
+        /** @var array{0: object{id: int}, 1: object{id: int}} $usedItems */
+
+        /** @var object{id: int} $firstUsedItem */
+        $firstUsedItem = $usedItems[0];
+        /** @var object{id: int} $secondUsedItem */
+        $secondUsedItem = $usedItems[1];
+
+        static::assertNotEquals($firstUsedItem->id, $secondUsedItem->id);
     }
 
     public function testThatSameItemsUsedInCoroutine(): void
@@ -158,6 +163,7 @@ class PoolTest extends TestCase
             /**
              * @return stdClass
              */
+            #[\Override]
             public function create(): mixed
             {
                 $obj = new stdClass();
@@ -175,7 +181,7 @@ class PoolTest extends TestCase
 
             $anotherItem = $pool->borrow();
 
-            return $item->id == $anotherItem->id;
+            return $item->id === $anotherItem->id;
         };
 
         $result = \Swoole\Coroutine\batch([$task]);
@@ -235,6 +241,7 @@ class PoolTest extends TestCase
          */ class() implements PoolItemFactoryInterface {
             public int $itemCreatedCount = 0;
 
+            #[\Override]
             public function create(): mixed
             {
                 $this->itemCreatedCount++;
@@ -273,6 +280,7 @@ class PoolTest extends TestCase
          */ class() implements PoolItemFactoryInterface {
             public int $itemCreatedCount = 0;
 
+            #[\Override]
             public function create(): mixed
             {
                 // отдаем управление, как это делает например pdo
@@ -313,18 +321,23 @@ class PoolTest extends TestCase
          */ class() extends stdClass implements PoolItemFactoryInterface {
             public int $count = 0;
 
+            #[\Override]
             public function create(): mixed
             {
                 return new class($this) {
                     public function __construct(
-                        protected stdClass $factory,
+                        protected object $factory,
                     ) {
-                        $this->factory->count++;
+                        /** @var stdClass&object{count: int} $factory */
+                        $factory = $this->factory;
+                        $factory->count++;
                     }
 
                     public function __destruct()
                     {
-                        $this->factory->count--;
+                        /** @var stdClass&object{count: int} $factory */
+                        $factory = $this->factory;
+                        $factory->count--;
                     }
                 };
             }
@@ -384,22 +397,35 @@ class PoolTest extends TestCase
         $item = new stdClass();
         $item->counter = 0;
 
-        $factoryMock = $this->createMock(PoolItemFactoryInterface::class);
-        $factoryMock->method('create')->willReturn($item);
+        $factory = new /** @implements PoolItemFactoryInterface<stdClass&object{counter: int}> */ class($item) implements PoolItemFactoryInterface {
+            public function __construct(
+                private stdClass $_item,
+            ) {
+            }
+
+            #[\Override]
+            public function create(): mixed
+            {
+                /** @var stdClass&object{counter: int} $item */
+                $item = $this->_item;
+
+                return $item;
+            }
+        };
 
         $timerTaskSchedulerMock = $this->createMock(TimerTaskSchedulerInterface::class);
 
-        /** @var \Allsilaevex\Pool\Hook\PoolItemHookManagerInterface<object> $manager */
         $manager = new PoolItemHookManager([
             $this->createPoolItemHook(PoolItemHook::AFTER_RETURN),
             $this->createPoolItemHook(PoolItemHook::BEFORE_BORROW),
         ]);
 
+        /** @psalm-suppress InvalidArgument */
         $pool = new Pool(
             name: 'test',
             config: new PoolConfig(1, .1, .1),
             poolItemWrapperFactory: new PoolItemWrapperFactory(
-                factory: $factoryMock,
+                factory: $factory,
                 poolItemTimerTaskScheduler: $timerTaskSchedulerMock,
             ),
             poolItemHookManager: $manager,
@@ -409,6 +435,121 @@ class PoolTest extends TestCase
         $pool->return($itemFromPool);
 
         static::assertEquals(2, $item->counter);
+    }
+
+    public function testBorrowRecoversAfterFailedRecreateInBeforeBorrowHook(): void
+    {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass>
+         */ class() implements PoolItemFactoryInterface {
+            public int $itemId = 0;
+
+            #[\Override]
+            public function create(): mixed
+            {
+                $this->itemId++;
+
+                if ($this->itemId === 2) {
+                    throw new PoolItemCreationException('recreate failed');
+                }
+
+                /** @var stdClass&object{id: int} $obj */
+                $obj = new stdClass();
+                $obj->id = $this->itemId;
+
+                return $obj;
+            }
+        };
+
+        $timerTaskSchedulerMock = $this->createMock(TimerTaskSchedulerInterface::class);
+
+        $pool = new Pool(
+            name: 'test',
+            config: new PoolConfig(1, .05, .1),
+            poolItemWrapperFactory: new PoolItemWrapperFactory(
+                factory: $factory,
+                poolItemTimerTaskScheduler: $timerTaskSchedulerMock,
+            ),
+            poolItemHookManager: new PoolItemHookManager([
+                new ConnectionCheckHook(
+                    checker: static fn (stdClass $item): bool => $item->id !== 1,
+                    logger: new NullLogger(),
+                ),
+            ]),
+        );
+
+        /** @var stdClass&object{id: int} $item */
+        $item = $pool->borrow();
+
+        static::assertSame(3, $item->id);
+        static::assertEquals(1, $pool->getCurrentSize());
+
+        $pool->return($item);
+    }
+
+    public function testBindingIsClearedWhenAnotherCoroutineReturnsBorrowedItem(): void
+    {
+        $timerTaskSchedulerMock = $this->createMock(TimerTaskSchedulerInterface::class);
+
+        $pool = new Pool(
+            name: 'test',
+            config: new PoolConfig(1, .01, .1, false, true),
+            poolItemWrapperFactory: new PoolItemWrapperFactory(
+                factory: new /**
+                 * @implements PoolItemFactoryInterface<stdClass>
+                 */ class() implements PoolItemFactoryInterface {
+                    #[\Override]
+                    public function create(): mixed
+                    {
+                        /** @var stdClass&object{id: non-empty-string} $obj */
+                        $obj = new stdClass();
+                        $obj->id = uniqid(prefix: 'test', more_entropy: true);
+
+                        return $obj;
+                    }
+                },
+                poolItemTimerTaskScheduler: $timerTaskSchedulerMock,
+            ),
+        );
+
+        $handoff = new \Swoole\Coroutine\Channel(1);
+        $returned = new \Swoole\Coroutine\Channel(1);
+        $attemptBorrow = new \Swoole\Coroutine\Channel(1);
+        $result = new \Swoole\Coroutine\Channel(1);
+
+        \Swoole\Coroutine\go(static function () use ($pool, $handoff, $attemptBorrow, $result): void {
+            $item = $pool->borrow();
+
+            $handoff->push($item);
+            $attemptBorrow->pop();
+
+            try {
+                $pool->borrow();
+                $result->push(true);
+            } catch (BorrowTimeoutException) {
+                $result->push(false);
+            }
+        });
+
+        \Swoole\Coroutine\go(static function () use ($pool, $handoff, $returned): void {
+            /** @var stdClass&object{id: non-empty-string} $item */
+            $item = $handoff->pop();
+
+            $pool->return($item);
+            $returned->push(true);
+        });
+
+        \Swoole\Coroutine\go(static function () use ($pool, $returned, $attemptBorrow): void {
+            $returned->pop();
+
+            $item = $pool->borrow();
+
+            $attemptBorrow->push(true);
+            \Swoole\Coroutine::sleep(.05);
+            $pool->return($item);
+        });
+
+        static::assertFalse($result->pop());
     }
 
     /**
@@ -424,6 +565,7 @@ class PoolTest extends TestCase
             ) {
             }
 
+            #[\Override]
             public function invoke(PoolItemWrapperInterface $poolItemWrapper): void
             {
                 $item = $poolItemWrapper->getItem();
@@ -435,6 +577,7 @@ class PoolTest extends TestCase
                 $item->counter++;
             }
 
+            #[\Override]
             public function getHook(): PoolItemHook
             {
                 return $this->hook;
@@ -458,6 +601,7 @@ class PoolTest extends TestCase
             /**
              * @return stdClass
              */
+            #[\Override]
             public function create(): mixed
             {
                 $this->itemCreatedCount++;

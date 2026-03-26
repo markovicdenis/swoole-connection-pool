@@ -11,7 +11,6 @@ use PhpBench\Attributes as Bench;
 use Allsilaevex\Pool\PoolItemWrapperFactory;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperInterface;
-use Allsilaevex\Pool\TimerTask\TimerTaskScheduler;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
 
 class PoolBench
@@ -90,8 +89,33 @@ class PoolBench
      */
     protected function createPool(int $size, float $itemCreationTimeout): Pool
     {
-        /** @var TimerTaskSchedulerInterface<PoolItemWrapperInterface<stdClass>> $poolItemTimerTaskScheduler */
-        $poolItemTimerTaskScheduler = new TimerTaskScheduler([]);
+        $poolItemTimerTaskScheduler = new /** @implements TimerTaskSchedulerInterface<PoolItemWrapperInterface<stdClass>> */ class() implements TimerTaskSchedulerInterface {
+            #[\Override]
+            public function bindTo(object $runner): void
+            {
+            }
+
+            #[\Override]
+            public function run(): void
+            {
+            }
+
+            #[\Override]
+            public function start(): void
+            {
+            }
+
+            #[\Override]
+            public function stopTask(int $timerId): bool
+            {
+                return true;
+            }
+
+            #[\Override]
+            public function stop(): void
+            {
+            }
+        };
 
         return new Pool(
             name: 'test',

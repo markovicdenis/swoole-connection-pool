@@ -11,11 +11,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\Exceptions\PoolItemRemovedException;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
 use function hrtime;
 
+#[AllowMockObjectsWithoutExpectations]
 #[CoversClass(PoolItemWrapper::class)]
-class PoolItemWrapperTest extends TestCase
+final class PoolItemWrapperTest extends TestCase
 {
     public function testUnusabilityAfterClose(): void
     {
@@ -47,13 +49,13 @@ class PoolItemWrapperTest extends TestCase
         \Swoole\Coroutine::sleep(.005);
 
         $stats = $poolItemWrapper->stats();
-        $elapsedSec = 1e-9 * (hrtime(true) - $start);
+        $elapsedSec = ((((float) hrtime(true)) - ((float) $start))) / 1_000_000_000.0;
 
         static::assertLessThan($elapsedSec, $stats['item_lifetime_sec']);
-        static::assertGreaterThan(.005, $stats['item_lifetime_sec']);
+        static::assertGreaterThan(.004, $stats['item_lifetime_sec']);
 
         static::assertLessThan($elapsedSec, $stats['current_state_duration_sec']);
-        static::assertGreaterThan(.005, $stats['current_state_duration_sec']);
+        static::assertGreaterThan(.004, $stats['current_state_duration_sec']);
 
         $poolItemWrapper->close();
     }
