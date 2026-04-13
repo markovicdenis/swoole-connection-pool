@@ -11,7 +11,6 @@ use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskSchedulerAwareTrait;
 
 use function hrtime;
-use function is_null;
 
 /**
  * @template TItem of object

@@ -96,9 +96,6 @@ class ConnectionPoolFactory
         return $connectionPoolFactory;
     }
 
-    /**
-     * @return static
-     */
     public function setLogger(LoggerInterface $logger): static
     {
         $this->logger = $logger;
@@ -106,9 +103,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setLeakDetectionThresholdSec(float $leakDetectionThresholdSec): static
     {
         $this->leakDetectionThresholdSec = $leakDetectionThresholdSec;
@@ -116,9 +110,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setMaxItemReservingForUpdateWaitingTimeSec(float $maxItemReservingForUpdateWaitingTimeSec): static
     {
         $this->maxItemReservingForUpdateWaitingTimeSec = $maxItemReservingForUpdateWaitingTimeSec;
@@ -126,9 +117,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setAutoReturn(bool $autoReturn): static
     {
         $this->autoReturn = $autoReturn;
@@ -136,9 +124,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setBindToCoroutine(bool $bindToCoroutine): static
     {
         $this->bindToCoroutine = $bindToCoroutine;
@@ -149,7 +134,6 @@ class ConnectionPoolFactory
     /**
      * @param  int<0, max>  $minimumIdle
      *
-     * @return static
      */
     public function setMinimumIdle(int $minimumIdle): static
     {
@@ -163,9 +147,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setIdleTimeoutSec(float $idleTimeoutSec): static
     {
         $this->idleTimeoutSec = $idleTimeoutSec;
@@ -173,9 +154,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setMaxLifetimeSec(float $maxLifetimeSec): static
     {
         $this->maxLifetimeSec = $maxLifetimeSec;
@@ -183,9 +161,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setBorrowingTimeoutSec(float $borrowingTimeoutSec): static
     {
         $this->borrowingTimeoutSec = $borrowingTimeoutSec;
@@ -193,9 +168,6 @@ class ConnectionPoolFactory
         return $this;
     }
 
-    /**
-     * @return static
-     */
     public function setReturningTimeoutSec(float $returningTimeoutSec): static
     {
         $this->returningTimeoutSec = $returningTimeoutSec;
@@ -206,7 +178,6 @@ class ConnectionPoolFactory
     /**
      * @param  callable(TConnection): bool  $checker
      *
-     * @return static
      */
     public function addConnectionChecker(callable $checker): static
     {
@@ -218,7 +189,6 @@ class ConnectionPoolFactory
     /**
      * @param  KeepaliveCheckerInterface<TConnection>  $keepaliveChecker
      *
-     * @return static
      */
     public function addKeepaliveChecker(KeepaliveCheckerInterface $keepaliveChecker): static
     {
@@ -230,7 +200,6 @@ class ConnectionPoolFactory
     /**
      * @param  TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>>  $timerTask
      *
-     * @return static
      */
     public function addPoolTimerTask(TimerTaskInterface $timerTask): static
     {

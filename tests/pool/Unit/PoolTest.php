@@ -23,11 +23,7 @@ final class PoolTest extends TestCase
     {
         $poolItemWrapperFactoryMock = $this->createMock(PoolItemWrapperFactoryInterface::class);
 
-        $pool = new class(
-            name: 'pool_name',
-            config: new PoolConfig(1, .1, .1),
-            poolItemWrapperFactory: $poolItemWrapperFactoryMock,
-        ) extends Pool {
+        $pool = new class(name: 'pool_name', config: new PoolConfig(1, .1, .1), poolItemWrapperFactory: $poolItemWrapperFactoryMock, ) extends Pool {
         };
 
         static::assertSame('pool_name', $pool->getName());

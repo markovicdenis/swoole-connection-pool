@@ -9,9 +9,9 @@ use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
+use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use Allsilaevex\ConnectionPool\ConnectionPoolFactory;
 use Allsilaevex\ConnectionPool\KeepaliveCheckerInterface;
-use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 
 #[AllowMockObjectsWithoutExpectations]
