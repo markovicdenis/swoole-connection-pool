@@ -49,6 +49,15 @@ final class ConnectionPoolFactoryTest extends TestCase
         static::assertSame($subclassFactory::class, $createdFactory::class);
     }
 
+    public function testSetMinimumIdleAllowsZero(): void
+    {
+        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
+
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 2, factory: $poolItemFactoryInterfaceMock);
+
+        static::assertSame($connectionPoolFactory, $connectionPoolFactory->setMinimumIdle(0));
+    }
+
     public function testCustomPoolTimerTaskRunsOnInstantiate(): void
     {
         $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
@@ -234,5 +243,65 @@ final class ConnectionPoolFactoryTest extends TestCase
         }
 
         static::assertEquals(1, $pool->getCurrentSize());
+    }
+
+    public function testResizerDoesNotPrewarmAndDrainsPoolWhenMinimumIdleIsZero(): void
+    {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass&object{id: int}>
+         */ class() implements PoolItemFactoryInterface {
+            private int $_nextId = 0;
+
+            #[\Override]
+            public function create(): mixed
+            {
+                /** @var stdClass&object{id: int} $connection */
+                $connection = new stdClass();
+                $connection->id = ++$this->_nextId;
+
+                return $connection;
+            }
+        };
+
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 3, factory: $factory)
+            ->setAutoReturn(false)
+            ->setBindToCoroutine(false)
+            ->setMinimumIdle(0)
+            ->setIdleTimeoutSec(.05);
+
+        $pool = $connectionPoolFactory->instantiate();
+
+        static::assertInstanceOf(Pool::class, $pool);
+
+        /** @var Pool<stdClass&object{id: int}> $pool */
+        static::assertSame(0, $pool->getCurrentSize());
+        static::assertSame(0, $pool->getIdleCount());
+
+        \Swoole\Coroutine::sleep(.12);
+
+        static::assertSame(0, $pool->getCurrentSize());
+        static::assertSame(0, $pool->getIdleCount());
+
+        /** @var stdClass&object{id: int} $connection */
+        $connection = $pool->borrow();
+
+        static::assertSame(1, $pool->getCurrentSize());
+        static::assertSame(0, $pool->getIdleCount());
+
+        $pool->return($connection);
+
+        static::assertSame(1, $pool->getCurrentSize());
+        static::assertSame(1, $pool->getIdleCount());
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            if ($pool->getCurrentSize() === 0 && $pool->getIdleCount() === 0) {
+                break;
+            }
+
+            \Swoole\Coroutine::sleep(.02);
+        }
+
+        static::assertSame(0, $pool->getCurrentSize());
+        static::assertSame(0, $pool->getIdleCount());
     }
 }

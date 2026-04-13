@@ -12,8 +12,6 @@ use Allsilaevex\ConnectionPool\KeepaliveCheckerInterface;
 use Allsilaevex\Pool\Exceptions\PoolItemRemovedException;
 use Allsilaevex\Pool\Exceptions\PoolItemCreationException;
 
-use function is_null;
-
 /**
  * @template TItem of object
  * @implements TimerTaskInterface<PoolItemWrapperInterface<TItem>>
@@ -38,7 +36,7 @@ final readonly class KeepaliveCheckTimerTask implements TimerTaskInterface
         /** @var PoolItemWrapperInterface<TItem>|null $runner */
         $runner = $runnerRef->get();
 
-        if (is_null($runner)) {
+        if ($runner === null) {
             return;
         }
 

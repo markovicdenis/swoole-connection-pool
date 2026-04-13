@@ -488,7 +488,7 @@ class Pool implements PoolInterface, PoolControlInterface
         $start = hrtime(true);
         $poolItemWrapper = $this->getReservedPoolItemWrapper($timeLeftSec, $increaseItemsOnEmptyPool);
 
-        if (is_null($poolItemWrapper->getItem())) {
+        if ($poolItemWrapper->getItem() === null) {
             $this->removePoolItemWrapper($poolItemWrapper);
 
             $recalculatedTimeLeftSec = max(.0001, $timeLeftSec - ((((float) hrtime(true)) - ((float) $start)) / 1_000_000_000.0));

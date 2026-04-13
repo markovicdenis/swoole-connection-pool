@@ -23,6 +23,9 @@ final class ResizerTimerTask implements TimerTaskInterface
     /** @phpstan-use TimerTaskSchedulerAwareTrait<PoolControlInterface<TItem>> */
     use TimerTaskSchedulerAwareTrait;
 
+    /**
+     * @param  int<0, max>  $minimumIdle
+     */
     public function __construct(
         public readonly float $intervalSec,
         public readonly int $minimumIdle,
@@ -40,7 +43,7 @@ final class ResizerTimerTask implements TimerTaskInterface
         /** @var PoolControlInterface<TItem>|null $runner */
         $runner = $runnerRef->get();
 
-        if (is_null($runner)) {
+        if ($runner === null) {
             return;
         }
 

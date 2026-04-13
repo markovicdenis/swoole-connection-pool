@@ -200,13 +200,15 @@ require_once __DIR__ . '/vendor/autoload.php';
         ),
     );
 
-    // The minimum number of connections that the pool will maintain
-    // Setting it to 0 means the pool will create connections only when needed
-    // Setting it to MAX means the pool will always keep exactly MAX connections
+    // The minimum number of idle connections that the pool will maintain
+    // Setting it to 0 means the pool is fully lazy: it creates connections only when needed
+    // and drains all idle connections after idleTimeoutSec
+    // Setting it to N > 0 keeps at least N idle connections warm
+    // Setting it to MAX keeps the whole pool warm
     $connectionPoolFactory->setMinimumIdle(2);
 
     // The time during which connections can remain idle in the pool
-    // After the timeout expires, connections will be destroyed until the pool size reaches the minimumIdle value
+    // After the timeout expires, idle connections will be destroyed until the idle count reaches minimumIdle
     $connectionPoolFactory->setIdleTimeoutSec(15.0);
 
     // Maximum connection lifetime
@@ -232,6 +234,9 @@ require_once __DIR__ . '/vendor/autoload.php';
 
     // If true, then when borrowing a connection from the pool for one coroutine, the same connection will always be returned
     $connectionPoolFactory->setBindToCoroutine(true);
+
+    // With the default minimumIdle = size, the whole pool stays warm.
+    // Call setMinimumIdle(0) to switch to a fully lazy pool that can drain back to zero.
 
     // A logger is used to signal abnormal situations
     // Any logger that implements \Psr\Log\LoggerInterface is allowed
@@ -284,6 +289,10 @@ require_once __DIR__ . '/vendor/autoload.php';
     );
 
     // Allows adding a ConnectionChecker that must be callable
+
+    // minimumIdle = 0: fully lazy pool, no prewarm, drain all idle connections after idleTimeoutSec
+    // minimumIdle = N > 0: keep at least N idle connections warm
+    // minimumIdle = size: keep the whole pool warm
     // This checker will be called before connection borrowing and can trigger connection re-creation (if it returns false)
     $connectionPoolFactory->addConnectionChecker(
         static function (\PDO $connection): bool {

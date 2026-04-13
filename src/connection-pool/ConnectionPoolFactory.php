@@ -30,9 +30,11 @@ use function array_map;
 
 /**
  * @template TConnection of object
+ * @phpstan-consistent-constructor
  */
 class ConnectionPoolFactory
 {
+    /** @var int<0, max> */
     protected int $minimumIdle;
     protected bool $autoReturn;
     protected bool $bindToCoroutine;
@@ -79,16 +81,19 @@ class ConnectionPoolFactory
     }
 
     /**
-     * @template T of object
+     * @template TConnectionNew of object
      *
-     * @param  positive-int                 $size
-     * @param  PoolItemFactoryInterface<T>  $factory
+     * @param  positive-int                             $size
+     * @param  PoolItemFactoryInterface<TConnectionNew>  $factory
      *
-     * @return static
+     * @return static<TConnectionNew>
      */
     public static function create(int $size, PoolItemFactoryInterface $factory): static
     {
-        return new static($size, $factory);
+        /** @var static<TConnectionNew> $connectionPoolFactory */
+        $connectionPoolFactory = new static($size, $factory);
+
+        return $connectionPoolFactory;
     }
 
     /**
@@ -142,13 +147,14 @@ class ConnectionPoolFactory
     }
 
     /**
-     * @param  positive-int  $minimumIdle
+     * @param  int<0, max>  $minimumIdle
      *
      * @return static
      */
     public function setMinimumIdle(int $minimumIdle): static
     {
-        if ($minimumIdle > $this->size) {
+        // @phpstan-ignore smaller.alwaysFalse
+        if ($minimumIdle < 0 || $minimumIdle > $this->size) {
             throw new LogicException();
         }
 
@@ -300,9 +306,21 @@ class ConnectionPoolFactory
      */
     protected function createPoolTimerTasks(): array
     {
+        /** @var TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>> $resizerTimerTask */
+        // @phpstan-ignore varTag.nativeType
+        $resizerTimerTask = new ResizerTimerTask(.1, $this->minimumIdle, $this->idleTimeoutSec, $this->logger);
+
+        /** @var TimerTaskInterface<\Allsilaevex\Pool\PoolControlInterface<TConnection>> $leakDetectionTimerTask */
+        // @phpstan-ignore varTag.nativeType
+        $leakDetectionTimerTask = new LeakDetectionTimerTask(
+            $this->leakDetectionThresholdSec,
+            $this->leakDetectionThresholdSec,
+            $this->logger,
+        );
+
         return [
-            new ResizerTimerTask(.1, $this->minimumIdle, $this->idleTimeoutSec, $this->logger),
-            new LeakDetectionTimerTask($this->leakDetectionThresholdSec, $this->leakDetectionThresholdSec, $this->logger),
+            $resizerTimerTask,
+            $leakDetectionTimerTask,
             ...$this->poolTimerTasks,
         ];
     }

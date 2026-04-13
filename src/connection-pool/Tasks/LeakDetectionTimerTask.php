@@ -10,8 +10,6 @@ use Allsilaevex\Pool\PoolControlInterface;
 use Allsilaevex\Pool\PoolItemWrapperInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
 
-use function is_null;
-
 /**
  * @template TItem of object
  * @implements TimerTaskInterface<PoolControlInterface<TItem>>
@@ -34,7 +32,7 @@ final readonly class LeakDetectionTimerTask implements TimerTaskInterface
         /** @var PoolControlInterface<TItem>|null $runner */
         $runner = $runnerRef->get();
 
-        if (is_null($runner)) {
+        if ($runner === null) {
             return;
         }
 
