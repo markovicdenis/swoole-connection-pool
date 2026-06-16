@@ -31,6 +31,8 @@ use function array_map;
 /**
  * @template TConnection of object
  * @phpstan-consistent-constructor
+ * @psalm-consistent-constructor
+ * @psalm-consistent-templates
  */
 class ConnectionPoolFactory
 {
@@ -83,14 +85,14 @@ class ConnectionPoolFactory
     /**
      * @template TConnectionNew of object
      *
-     * @param  positive-int                             $size
+     * @param  positive-int                                $size
      * @param  PoolItemFactoryInterface<TConnectionNew>  $factory
      *
      * @return static<TConnectionNew>
      */
     public static function create(int $size, PoolItemFactoryInterface $factory): static
     {
-        /** @var static<TConnectionNew> $connectionPoolFactory */
+        /** @psalm-suppress UnsafeGenericInstantiation */
         $connectionPoolFactory = new static($size, $factory);
 
         return $connectionPoolFactory;

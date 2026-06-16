@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Allsilaevex\ConnectionPool\Test\Integration;
 
 use stdClass;
+use WeakReference;
+use ReflectionClass;
 use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
+use Allsilaevex\Pool\PoolControlInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\TimerTask\TimerTaskInterface;
@@ -38,40 +41,68 @@ final class ConnectionPoolFactoryTest extends TestCase
 
     public function testCreatePreservesSubclassType(): void
     {
-        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
-
-        $subclassFactory = new class(size: 1, factory: $poolItemFactoryInterfaceMock) extends ConnectionPoolFactory {
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass>
+         */ class() implements PoolItemFactoryInterface {
+            #[\Override]
+            public function create(): mixed
+            {
+                return new stdClass();
+            }
         };
 
-        $createdFactory = $subclassFactory::create(size: 1, factory: $poolItemFactoryInterfaceMock)
+        $subclassFactory = new TestConnectionPoolFactorySubclass(size: 1, factory: $factory);
+
+        $createdFactory = $subclassFactory::create(size: 1, factory: $factory)
             ->setAutoReturn(false);
 
-        static::assertSame($subclassFactory::class, $createdFactory::class);
+        static::assertSame($subclassFactory::class, (new ReflectionClass($createdFactory))->getName());
     }
 
     public function testSetMinimumIdleAllowsZero(): void
     {
-        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass>
+         */ class() implements PoolItemFactoryInterface {
+            #[\Override]
+            public function create(): mixed
+            {
+                return new stdClass();
+            }
+        };
 
-        $connectionPoolFactory = ConnectionPoolFactory::create(size: 2, factory: $poolItemFactoryInterfaceMock);
+        $connectionPoolFactory = ConnectionPoolFactory::create(size: 2, factory: $factory);
 
         static::assertSame($connectionPoolFactory, $connectionPoolFactory->setMinimumIdle(0));
     }
 
     public function testCustomPoolTimerTaskRunsOnInstantiate(): void
     {
-        $poolItemFactoryInterfaceMock = $this->createMock(PoolItemFactoryInterface::class);
+        $factory = new /**
+         * @implements PoolItemFactoryInterface<stdClass>
+         */ class() implements PoolItemFactoryInterface {
+            #[\Override]
+            public function create(): mixed
+            {
+                return new stdClass();
+            }
+        };
 
-        $timerTask = new class() implements TimerTaskInterface {
+        $timerTask = new /**
+         * @implements TimerTaskInterface<PoolControlInterface<stdClass>>
+         */ class() implements TimerTaskInterface {
             /** @var list<string> */
             public array $runnerNames = [];
 
+            /**
+             * @param WeakReference<PoolControlInterface<stdClass>> $runnerRef
+             */
             #[\Override]
             public function run(int $timerId, mixed $runnerRef): void
             {
                 $runner = $runnerRef->get();
 
-                if ($runner !== null) {
+                if ($runner instanceof PoolControlInterface) {
                     $this->runnerNames[] = $runner->getName();
                 }
             }
@@ -83,7 +114,7 @@ final class ConnectionPoolFactoryTest extends TestCase
             }
         };
 
-        ConnectionPoolFactory::create(size: 1, factory: $poolItemFactoryInterfaceMock)
+        ConnectionPoolFactory::create(size: 1, factory: $factory)
             ->addPoolTimerTask($timerTask)
             ->instantiate(name: 'custom-pool');
 
@@ -303,5 +334,23 @@ final class ConnectionPoolFactoryTest extends TestCase
 
         static::assertSame(0, $pool->getCurrentSize());
         static::assertSame(0, $pool->getIdleCount());
+    }
+}
+
+/**
+ * @template TConnection of object
+ * @extends ConnectionPoolFactory<TConnection>
+ */
+final class TestConnectionPoolFactorySubclass extends ConnectionPoolFactory
+{
+    /**
+     * @param positive-int $size
+     * @param PoolItemFactoryInterface<TConnection> $factory
+     */
+    public function __construct(
+        int $size,
+        PoolItemFactoryInterface $factory
+    ) {
+        parent::__construct($size, $factory);
     }
 }

@@ -247,12 +247,14 @@ class Pool implements PoolInterface, PoolControlInterface
         return $this->name;
     }
 
+    /** @phpstan-impure */
     #[\Override]
     public function getIdleCount(): int
     {
         return $this->concurrentBag->length();
     }
 
+    /** @phpstan-impure */
     #[\Override]
     public function getCurrentSize(): int
     {

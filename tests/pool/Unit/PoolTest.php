@@ -9,6 +9,7 @@ use Allsilaevex\Pool\Pool;
 use PHPUnit\Framework\TestCase;
 use Allsilaevex\Pool\PoolConfig;
 use Allsilaevex\Pool\PoolItemWrapperFactory;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Allsilaevex\Pool\PoolItemFactoryInterface;
 use Allsilaevex\Pool\PoolItemWrapperFactoryInterface;
@@ -21,9 +22,12 @@ final class PoolTest extends TestCase
 {
     public function testPoolCanBeSubclassed(): void
     {
+        /** @var MockObject&PoolItemWrapperFactoryInterface<stdClass> $poolItemWrapperFactoryMock */
         $poolItemWrapperFactoryMock = $this->createMock(PoolItemWrapperFactoryInterface::class);
 
-        $pool = new class(name: 'pool_name', config: new PoolConfig(1, .1, .1), poolItemWrapperFactory: $poolItemWrapperFactoryMock, ) extends Pool {
+        $pool = new /**
+         * @extends Pool<stdClass>
+         */ class(name: 'pool_name', config: new PoolConfig(1, .1, .1), poolItemWrapperFactory: $poolItemWrapperFactoryMock, ) extends Pool {
         };
 
         static::assertSame('pool_name', $pool->getName());

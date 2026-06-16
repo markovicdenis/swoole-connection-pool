@@ -18,8 +18,10 @@ interface PoolControlInterface
 
     public function getConfig(): PoolConfig;
 
+    /** @phpstan-impure */
     public function getIdleCount(): int;
 
+    /** @phpstan-impure */
     public function getCurrentSize(): int;
 
     /**
